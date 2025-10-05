@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b1020"/>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>Selfcare / To‑Do Tombola (PWA)</title>
+  <style>
+    :root{ --bg:#0b1020; --card:#121a33; --muted:#8ea0c2; --text:#e8eeff; --border:rgba(255,255,255,.08); }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Ubuntu,"Helvetica Neue",Arial,sans-serif;
+         background:radial-gradient(1000px 600px at 15% -10%,#1a2557 0%,transparent 60%),
+                    radial-gradient(900px 500px at 110% -20%,#1a5734 0%,transparent 60%),var(--bg);color:var(--text);}
+    .wrap{max-width:980px;margin:40px auto;padding:0 16px}
+    header{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:18px}
+    h1{font-size:clamp(22px,2vw,28px);margin:0;letter-spacing:.4px}
+    .sub{color:var(--muted);font-size:.95rem}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid var(--border);
+          border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:16px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    label{display:block;font-weight:600;margin-bottom:6px}
+    input[type="text"], select{width:100%;padding:12px 14px;border-radius:12px;background:#0f1630;border:1px solid var(--border);color:var(--text);outline:none}
+    input[type="text"]::placeholder{color:#6f7ea6}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{appearance:none;border:1px solid var(--border);background:#0f1630;color:#e8eeff;padding:10px 14px;border-radius:12px;
+         font-weight:600;cursor:pointer;transition:transform .05s ease, border-color .2s ease}
+    .btn:hover{border-color:#2a3b7a}
+    .btn:active{transform:translateY(1px)}
+    .btn.primary{background:linear-gradient(180deg,#1a2a64,#132048);border-color:#2f4db3}
+    .btn.good{background:linear-gradient(180deg,#1e3a2e,#0f271b);border-color:#2f7a4d}
+    .btn.warn{background:linear-gradient(180deg,#5a1a1a,#2c0d0d);border-color:#8a2a2a}
+    .seg{display:inline-flex;background:#0e1730;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    .seg button{border:0;background:transparent;color:#9fb3e0;padding:8px 12px;font-weight:700;cursor:pointer}
+    .seg button.active{background:#1a2753;color:#e8eeff}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;border:1px solid var(--border);
+          background:#0f1630;color:#9fb3e0;font-weight:600}
+    .pill input{accent-color:#6fa0ff}
+    .list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+    @media (max-width:900px){.list{grid-template-columns:1fr}}
+    .item{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0e1733;border:1px solid var(--border);
+          padding:10px 12px;border-radius:12px}
+    .item small{color:#9fb3e0}
+    .section-title{display:flex;align-items:center;justify-content:space-between;margin:8px 0 4px;gap:8px}
+    .section-title h3{margin:0;font-size:1rem}
+    .muted{color:#9fb3e0}
+    .result{margin-top:12px;padding:16px;border-radius:14px;border:1px dashed #3a528e;background:rgba(26,42,100,.2);font-size:1.15rem}
+    .empty{padding:16px;border-radius:12px;border:1px dashed var(--border);color:#9fb3e0}
+    .foot{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-top:18px}
+    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:#0b1226;border:1px solid var(--border);
+         padding:2px 8px;border-radius:8px;color:#cbd8ff}
+    .rolling{opacity:.95}
+    .disabled{opacity:.6;pointer-events:none;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1 id="appTitle">Selfcare‑Tombola</h1>
+        <div class="sub">Aktivitäten/To‑Dos speichern → Zeitfenster wählen (oder „Egal“) → Zufallsidee ziehen. Funktioniert offline.</div>
+        <div class="seg" role="tablist" aria-label="Modus">
+          <button id="modeSelfcare" class="active" role="tab" aria-selected="true">Selfcare</button>
+          <button id="modeTodo" role="tab" aria-selected="false">To‑Do</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn" id="exportBtn" title="Als JSON exportieren">Export</button>
+        <label class="btn" for="importFile" title="JSON importieren" style="cursor:pointer">Import<input id="importFile" type="file" accept="application/json" style="display:none"></label>
+        <button class="btn warn" id="resetBtn" title="Alles löschen">Reset</button>
+        <button class="btn" id="installBtn" title="App installieren" style="display:none">Installieren</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2 style="margin:4px 0 12px" id="formTitle">Eintrag hinzufügen</h2>
+        <div class="row" style="gap:12px">
+          <div style="flex:2 1 320px">
+            <label for="title">Titel</label>
+            <input id="title" type="text" placeholder="z. B. 5‑Minuten‑Atmung / Müll rausbringen" />
+          </div>
+          <div style="flex:1 1 200px">
+            <label for="category">Dauer</label>
+            <select id="category">
+              <option value="<10">&lt; 10 Minuten</option>
+              <option value="10-20">10–20 Minuten</option>
+              <option value="20-30">20–30 Minuten</option>
+              <option value=">30">&gt; 30 Minuten</option>
+            </select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="addBtn">Speichern</button>
+          <span class="muted">Tipp: <span class="kbd">Enter</span> speichert.</span>
+        </div>
+
+        <div class="section-title" style="margin-top:18px">
+          <div class="row" style="align-items:center;gap:10px">
+            <h3 id="listTitle" style="margin-right:4px">Ideenpool</h3>
+            <button class="btn" id="togglePoolBtn">Ideenpool zeigen</button>
+          </div>
+          <small class="muted" id="countInfo"></small>
+        </div>
+        <div id="poolWrap" style="display:none">
+          <div id="list" class="list"></div>
+          <div id="empty" class="empty" style="display:none">Noch nichts gespeichert.</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 style="margin:4px 0 12px">Ziehung</h2>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <label class="pill"><input type="radio" name="pickCat" value="any" checked> Egal</label>
+          <label class="pill"><input type="radio" name="pickCat" value="<10"> &lt;10</label>
+          <label class="pill"><input type="radio" name="pickCat" value="10-20"> 10–20</label>
+          <label class="pill"><input type="radio" name="pickCat" value="20-30"> 20–30</label>
+          <label class="pill"><input type="radio" name="pickCat" value=">30"> &gt;30</label>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn good" id="drawBtn">Zieh was!</button>
+          <button class="btn" id="skipBtn" title="Die letzte gezogene Idee ignorieren und neu ziehen">Nochmal</button>
+          <button class="btn" id="doneBtn" title="Gezogenen Eintrag als erledigt markieren (nur To‑Do)">Erledigt</button>
+        </div>
+        <div id="result" class="result" style="display:none"></div>
+        <div id="noData" class="empty" style="display:none">Für die Auswahl ist noch nichts gespeichert.</div>
+      </section>
+    </div>
+
+    <div class="foot muted">
+      <div>Speicherung lokal im Browser (<em>localStorage</em>). Modus‑getrennt (Selfcare und To‑Do).</div>
+      <div>Tastenkürzel: <span class="kbd">Enter</span> Speichern · <span class="kbd">Ctrl/⌘ + K</span> Ziehung</div>
+    </div>
+  </div>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js');
+      });
+    }
+    let deferredInstall=null;
+    const installBtn=document.getElementById('installBtn');
+    window.addEventListener('beforeinstallprompt',(e)=>{e.preventDefault();deferredInstall=e;installBtn.style.display='inline-block';});
+    installBtn.addEventListener('click',async ()=>{if(!deferredInstall)return;deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;installBtn.style.display='none';});
+
+    const LS_KEY='selfcare_tombola_v3';
+    const titleEl=document.getElementById('title');
+    const catEl=document.getElementById('category');
+    const addBtn=document.getElementById('addBtn');
+    const listEl=document.getElementById('list');
+    const emptyEl=document.getElementById('empty');
+    const countInfo=document.getElementById('countInfo');
+    const drawBtn=document.getElementById('drawBtn');
+    const skipBtn=document.getElementById('skipBtn');
+    const doneBtn=document.getElementById('doneBtn');
+    const resultEl=document.getElementById('result');
+    const noDataEl=document.getElementById('noData');
+    const exportBtn=document.getElementById('exportBtn');
+    const importFile=document.getElementById('importFile');
+    const resetBtn=document.getElementById('resetBtn');
+    const togglePoolBtn=document.getElementById('togglePoolBtn');
+    const poolWrap=document.getElementById('poolWrap');
+    const modeSelfBtn=document.getElementById('modeSelfcare');
+    const modeTodoBtn=document.getElementById('modeTodo');
+    const appTitle=document.getElementById('appTitle');
+    const categories=["<10","10-20","20-30",">30"];
+
+    function load(){try{return JSON.parse(localStorage.getItem(LS_KEY))||migrate()||[]}catch{return[]}}
+    function save(d){localStorage.setItem(LS_KEY,JSON.stringify(d));}
+    function migrate(){
+      for(const k of ['selfcare_tombola_v1','selfcare_tombola_v2']){
+        try{
+          const o=JSON.parse(localStorage.getItem(k));
+          if(Array.isArray(o)&&o.length){
+            const m=o.map(x=>({id:x.id||crypto.randomUUID(),title:x.title,cat:x.cat,type:x.type||'selfcare',done:!!x.done}));
+            localStorage.setItem(LS_KEY,JSON.stringify(m));
+            return m;
+          }
+        }catch{}
+      }
+      return null;
+    }
+
+    let currentMode=localStorage.getItem('tombola_mode')||'selfcare';
+    function setMode(m){
+      currentMode=m;localStorage.setItem('tombola_mode',m);
+      modeSelfBtn.classList.toggle('active',m==='selfcare');
+      modeTodoBtn.classList.toggle('active',m==='todo');
+      modeSelfBtn.setAttribute('aria-selected',m==='selfcare');
+      modeTodoBtn.setAttribute('aria-selected',m==='todo');
+      appTitle.textContent=m==='selfcare'?'Selfcare‑Tombola':'To‑Do‑Tombola';
+      document.title=appTitle.textContent+' (PWA)';
+      render();updateDoneBtn();
+    }
+    function updateDoneBtn(){doneBtn.style.display=currentMode==='todo'?'inline-block':'none';}
+
+    let poolVisible=false;
+    function setPoolVisibility(v){
+      poolVisible=v;
+      poolWrap.style.display=v?'block':'none';
+      togglePoolBtn.textContent=v?'Ideenpool verbergen':'Ideenpool zeigen';
+    }
+
+    function render(){
+      const data=load().filter(x=>x.type===currentMode);
+      listEl.innerHTML='';
+      const total=data.length;
+      countInfo.textContent=total?`${total} gespeichert`:'';
+      emptyEl.style.display=total?'none':'block';
+      if(!total) return;
+      data.sort((a,b)=>categories.indexOf(a.cat)-categories.indexOf(b.cat)||a.title.localeCompare(b.title,'de'));
+      for(const item of data){
+        const row=document.createElement('div');row.className='item';
+        const status=currentMode==='todo'&&item.done?' · ✅ erledigt':'';
+        row.innerHTML=`
+          <div>
+            <div style="font-weight:700;line-height:1.1">${escapeHtml(item.title)}</div>
+            <small class="muted">${labelFor(item.cat)}${status}</small>
+          </div>
+          <div class="row">
+            ${currentMode==='todo'?'<button class="btn" data-action="toggle">Erledigt</button>':''}
+            <button class="btn" data-action="edit">Bearb.</button>
+            <button class="btn warn" data-action="del">Löschen</button>
+          </div>`;
+        if(currentMode==='todo'){
+          row.querySelector('[data-action="toggle"]').addEventListener('click',()=>{
+            const next=load().map(x=>x.id===item.id?{...x,done:!x.done}:x);
+            save(next);render();
+          });
+        }
+        row.querySelector('[data-action="del"]').addEventListener('click',()=>{
+          const next=load().filter(x=>x.id!==item.id);
+          save(next);render();
+        });
+        row.querySelector('[data-action="edit"]').addEventListener('click',()=>{
+          const name=prompt('Neuer Titel:',item.title); if(name===null) return;
+          const cat=prompt('Neue Kategorie: <10 | 10-20 | 20-30 | >30',item.cat); if(cat===null) return;
+          const valid=["<10","10-20","20-30",">30"]; if(!valid.includes(cat.trim())){alert('Ungültige Kategorie.');return}
+          const next=load().map(x=>x.id===item.id?{...x,title:name.trim(),cat:cat.trim()}:x);
+          save(next);render();
+        });
+        listEl.appendChild(row);
+      }
+    }
+
+    function labelFor(cat){
+      switch(cat){
+        case '<10': return '< 10 Minuten';
+        case '10-20': return '10–20 Minuten';
+        case '20-30': return '20–30 Minuten';
+        case '>30': return '> 30 Minuten';
+        default: return cat;
+      }
+    }
+
+    function addEntry(){
+      const title=titleEl.value.trim(); const cat=catEl.value;
+      if(!title){titleEl.focus();return}
+      const data=load();
+      if(data.some(x=>x.title.toLowerCase()===title.toLowerCase()&&x.cat===cat&&x.type===currentMode)){
+        alert('Dieser Eintrag existiert bereits in dieser Kategorie.');return;
+      }
+      data.push({id:crypto.randomUUID(),title,cat,type:currentMode,done:false});
+      save(data); titleEl.value=''; titleEl.focus(); render();
+    }
+
+    function currentPickCategory(){
+      const checked=document.querySelector('input[name="pickCat"]:checked');
+      return checked?checked.value:'any';
+    }
+
+    let lastId=null, animating=false;
+    function draw(){
+      if(animating) return;
+      const cat=currentPickCategory();
+      let pool=load().filter(x=>x.type===currentMode);
+      if(cat!=='any') pool=pool.filter(x=>x.cat===cat);
+      if(currentMode==='todo'){
+        const open=pool.filter(x=>!x.done);
+        if(open.length) pool=open;
+      }
+      if(pool.length===0){
+        resultEl.style.display='none'; noDataEl.style.display='block'; return;
+      }
+      noDataEl.style.display='none';
+      let candidates=pool;
+      if(pool.length>1 && lastId){
+        const alt=pool.filter(x=>x.id!==lastId);
+        if(alt.length) candidates=alt;
+      }
+      animateRoll(candidates, 1200).then(pick=>{
+        lastId=pick.id;
+        const status=currentMode==='todo'&&pick.done?' · ✅ erledigt':'';
+        resultEl.innerHTML=`<strong>${escapeHtml(pick.title)}</strong><br><small class="muted">${labelFor(pick.cat)}${status}</small>`;
+        resultEl.style.display='block';
+        microCelebrate();
+        resultEl.dataset.lastId=pick.id;
+      });
+    }
+
+    function animateRoll(pool, durationMs){
+      animating=true;
+      drawBtn.classList.add('disabled'); skipBtn.classList.add('disabled'); doneBtn.classList.add('disabled');
+      resultEl.style.display='block';
+      const start=performance.now(); let lastText='';
+      return new Promise(resolve=>{
+        function frame(now){
+          const t=now-start; const progress=Math.min(t/durationMs,1);
+          const interval=60 + 240*progress;
+          resultEl.classList.add('rolling');
+          const nextTime=(+resultEl.dataset._nextTime||0);
+          if(now>=nextTime){
+            const pick=pool[Math.floor(Math.random()*pool.length)];
+            const text=`${pick.title} · ${labelFor(pick.cat)}`;
+            if(text!==lastText){ resultEl.textContent=text; lastText=text; }
+            resultEl.dataset._nextTime=String(now+interval);
+            resultEl.dataset._lastId=pick.id;
+          }
+          if(progress<1){
+            requestAnimationFrame(frame);
+          }else{
+            const id=resultEl.dataset._lastId;
+            const final=pool.find(x=>x.id===id) || pool[0];
+            resultEl.classList.remove('rolling');
+            delete resultEl.dataset._nextTime; delete resultEl.dataset._lastId;
+            animating=false;
+            drawBtn.classList.remove('disabled'); skipBtn.classList.remove('disabled'); doneBtn.classList.remove('disabled');
+            resolve(final);
+          }
+        }
+        requestAnimationFrame(frame);
+      });
+    }
+
+    function markDoneFromResult(){
+      if(currentMode!=='todo') return;
+      const id=resultEl.dataset.lastId; if(!id) return;
+      const next=load().map(x=>x.id===id?{...x,done:true}:x);
+      save(next); render(); draw();
+    }
+
+    function microCelebrate(){
+      const e=document.createElement('div');
+      e.style.position='fixed'; e.style.left='50%'; e.style.top='14px'; e.style.transform='translateX(-50%)';
+      e.style.pointerEvents='none'; e.style.fontSize='24px'; e.style.opacity='0.95';
+      e.textContent='🎉'; document.body.appendChild(e);
+      setTimeout(()=>{ e.style.transition='all .8s ease'; e.style.top='-50px'; e.style.opacity='0'; },30);
+      setTimeout(()=> e.remove(), 1000);
+    }
+
+    function exportJson(){
+      const blob=new Blob([JSON.stringify(load(),null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='tombola-data.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importJson(file){
+      const reader=new FileReader();
+      reader.onload=()=>{
+        try{
+          const parsed=JSON.parse(reader.result);
+          if(!Array.isArray(parsed)) throw new Error('Struktur ungültig');
+          const clean=parsed
+            .filter(x=>x && typeof x.title==='string' && ["<10","10-20","20-30",">30"].includes(x.cat))
+            .map(x=>({id:x.id||crypto.randomUUID(),title:x.title.trim(),cat:x.cat,type:(x.type==='todo'?'todo':'selfcare'),done:!!x.done}));
+          const existing=load(); const merged=existing.slice();
+          for(const n of clean){
+            if(!merged.some(x=>x.title.toLowerCase()===n.title.toLowerCase() && x.cat===n.cat && x.type===n.type)) merged.push(n);
+          }
+          save(merged); render();
+        }catch(err){ alert('Import fehlgeschlagen: '+err.message) }
+      };
+      reader.readAsText(file);
+    }
+
+    function resetAll(){
+      if(confirm('Wirklich alle Einträge (Selfcare & To‑Do) löschen?')){
+        localStorage.removeItem(LS_KEY);
+        render(); resultEl.style.display='none'; noDataEl.style.display='none';
+      }
+    }
+
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",""":"&quot;","'":"&#39;"}[c]));
+    }
+
+    addBtn.addEventListener('click', addEntry);
+    titleEl.addEventListener('keydown', e=>{ if(e.key==='Enter') addEntry(); });
+    drawBtn.addEventListener('click', draw);
+    skipBtn.addEventListener('click', draw);
+    doneBtn.addEventListener('click', markDoneFromResult);
+    exportBtn.addEventListener('click', exportJson);
+    importFile.addEventListener('change', e=>{ if(e.target.files?.[0]) importJson(e.target.files[0]); e.target.value=''; });
+    resetBtn.addEventListener('click', resetAll);
+    togglePoolBtn.addEventListener('click', ()=> setPoolVisibility(!poolVisible));
+    document.addEventListener('keydown', e=>{ if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); draw(); } });
+    modeSelfBtn.addEventListener('click', ()=> setMode('selfcare'));
+    modeTodoBtn.addEventListener('click', ()=> setMode('todo'));
+    setMode(currentMode);
+    setPoolVisibility(false);
+  </script>
+</body>
+</html>
