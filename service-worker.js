@@ -1,8 +1,9 @@
-/* Cache-first service worker for offline support */ 
-const CACHE_NAME = 'tombola-cache-v2';
+/* Cache-first service worker */ 
+const CACHE_NAME = 'tombola-cache-v3';
 const ASSETS = [
   './',
   './index.html',
+  './app.js',
   './manifest.webmanifest',
   './service-worker.js',
   './icons/icon-192.png',
@@ -16,6 +17,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(keys.map(k => k !== CACHE_NAME && caches.delete(k))))
   );
+  self.clients.call;
   self.clients.claim();
 });
 self.addEventListener('fetch', (event) => {
